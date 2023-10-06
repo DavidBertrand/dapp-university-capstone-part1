@@ -5,13 +5,15 @@ const tokens = (n) => {
 	return value = ethers.utils.parseUnits(n.toString(), 'ether')
 }
 describe('Token', () => {
-	let token, accounts, deployer
+	let token, accounts, deployer, receiver, exchange
 	beforeEach( async () => {
 		// Fetch Token from Blockchain
 		const Token = await ethers.getContractFactory('Token')     
 		token = await Token.deploy('Dapp University', 'DAPP', '1000000' )     
 		accounts = await ethers.getSigners()
 		deployer = accounts[0]
+		receiver = accounts[1]
+		exchange = accounts[2]
 
 	})
 
@@ -36,9 +38,92 @@ describe('Token', () => {
 		it('it assigns the total supply to the deployer', async () => {
 			console.log(deployer.address)
 			expect(await token.balanceOf(deployer.address)).to.equal(totalSupply)
-		})	
+		})
+	})
+
+	describe('Sending token', () => {
+		let amount, transaction, result
+
+		beforeEach(async () => {
+     		// Log balance before transfer
+			//console.log("deployer balance before transfer", (await token.balanceOf(deployer.address)).toString())
+			//console.log("receiver balance before transfer", (await token.balanceOf(receiver.address)).toString())
+			 amount = tokens(100)
+			 transaction = await token.connect(deployer).transfer(receiver.address,amount)
+			 result = await transaction.wait()
+		})
 
 
+		describe('Success', () => {
+
+			it('transfers token balances', async () => {
+				// Log balance after transfer 
+				//console.log("deployer balance before transfer", (await token.balanceOf(deployer.address)).toString())
+				//console.log("receiver balance before transfer", (await token.balanceOf(receiver.address)).toString())			
+
+				expect ((await token.balanceOf(deployer.address)).toString()).to.equal(tokens(999900))
+				expect ((await token.balanceOf(receiver.address)).toString()).to.equal(amount)
+			})
+
+			// Ensure that tokens were transferred (balance changed)
+			it('emits an Transfer event', async() => {
+				const event = result.events[0]
+				//console.log(event)
+				expect(event.event).to.equal('Transfer')
+				const args = event.args
+				expect (args.from).to.equal(deployer.address)
+				expect (args.to).to.equal(receiver.address)
+				expect (args.value.toString()).to.equal(amount)
+			})
+		})
+
+
+
+		describe('Failure', () => {
+			it('rejects insufficient balances', async () => {
+				//transfer more tokens than deployer has - 100M
+				const invalidAmount= tokens(1000000000)
+				await expect( token.connect(deployer).transfer(receiver.address, invalidAmount)).to.be.reverted
+			})
+
+			it('rejects invalid addresses', async () => {
+				//transfer more tokens than deployer has - 100M
+				const invalidAmount= tokens(100)
+				await expect( token.connect(deployer).transfer('0x0000000000000000000000000000000000000000', invalidAmount)).to.be.reverted
+			})			
+		})
 	})
 	
+
+	describe('Approving token', () => {
+		let amount, transaction, result
+		beforeEach (async () => {
+			amount = tokens(100)
+			transaction = await token.connect(deployer).approve(exchange.address, amount)
+			result = await transaction.wait()
+		})
+		describe('Success', () => {
+			it ('allocates an allowance for delegated token spending', async () => {
+				expect(await token.allowance(deployer.address, exchange.address)).to.equal(amount)
+			})
+
+			it('emits an Approval event', async() => {
+				const event = result.events[0]
+				expect(event.event).to.equal('Approval')
+				const args = event.args
+				expect (args.owner).to.equal(deployer.address)
+				expect (args.spender).to.equal(exchange.address)
+				expect (args.value).to.equal(amount)
+			})
+
+		})
+
+    describe('Failure', () => {
+      it('rejects invalid spenders', async () => {
+        await expect(token.connect(deployer).approve('0x0000000000000000000000000000000000000000', amount)).to.be.reverted
+      })
+    })
+	})	
+	
+
 })
