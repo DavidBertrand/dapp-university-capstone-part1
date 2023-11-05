@@ -46,11 +46,9 @@ describe('Exchange', () => {
 		describe('Success', () => {
 
 			beforeEach( async () => {
-				console.log('before  approval')
 				// Approbe Token
 				transaction = await token1.connect(user1).approve(exchange.address, amount)
 				result = transaction.wait()
-				console.log('after  approval')
 				// Deposit Token
 				transaction = await exchange.connect(user1).depositToken(token1.address, amount)
 				result = await transaction.wait()
@@ -82,4 +80,82 @@ describe('Exchange', () => {
 			})
 		})
 	})
+
+	describe('Withdrawing Tokens', () => {
+		let transaction, result
+		let amount = tokens(10)
+	
+
+		describe('Success', () => {
+
+			beforeEach( async () => {
+				// Approbe Token
+				transaction = await token1.connect(user1).approve(exchange.address, amount)
+				result = transaction.wait()
+				// Deposit Token before Withdrawing Token
+				transaction = await exchange.connect(user1).depositToken(token1.address, amount)
+				result = await transaction.wait()
+
+
+				// Now Withdraw Token
+				transaction = await exchange.connect(user1).withdrawToken(token1.address, amount)
+				result = await transaction.wait()
+
+			})
+			it('withdraw token funds', async () =>{
+				expect( await token1.balanceOf(exchange.address)).to.equal(0)
+				expect( await exchange.tokens(token1.address, user1.address)).to.equal(0)
+				expect( await exchange.balanceOf(token1.address, user1.address)).to.equal(0)
+
+			})
+
+
+			it('emits an Withdraw event', async() => {
+				const event = result.events[1]  // 2 events were emitted
+				expect(event.event).to.equal('Withdraw')
+				
+				const args = event.args
+				expect (args.token).to.equal(token1.address)
+				expect (args.user).to.equal(user1.address)
+				expect (args.amount).to.equal(amount)
+				expect (args.balance).to.equal(0)
+			})
+
+
+		})
+
+		describe('Failure', () => {
+			it('fails for insufficient balance', async () =>{
+				// Attempts to withdraw token on a 0 balance
+				await expect(exchange.connect(user1).withdrawToken(token1.address, amount)).to.be.reverted
+
+			})
+		})
+
+	})
+
+	describe('Checking Balances', () => {
+
+		describe('Withdrawing Tokens', () => {
+			let transaction, result
+			let amount = tokens(1)	
+
+			beforeEach( async () => {
+				// Approbe Token
+				transaction = await token1.connect(user1).approve(exchange.address, amount)
+				result = transaction.wait()
+				// Deposit Token before Withdrawing Token
+				transaction = await exchange.connect(user1).depositToken(token1.address, amount)
+				result = await transaction.wait()
+
+			})
+			it('returns user balance', async () =>{
+				expect( await exchange.balanceOf(token1.address, user1.address)).to.equal(amount)
+			})
+
+		})
+
+	})
+
+
 })
